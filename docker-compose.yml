@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  #1: MySQL 8.0 (Bán hàng)
+  mysql_db:
+    image: mysql:8.0
+    container_name: noah_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: noah_sales
+      MYSQL_USER: noah_user
+      MYSQL_PASSWORD: noah_password
+    ports:
+      - "3306:3306"
+    volumes:
+      # Tự động nạp file init.sql của Nhóm 7 khi chạy lần đầu
+      - ./data/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+
+  # 2: PostgreSQL 15 (Tài chính)
+  postgres_db:
+    image: postgres:15
+    container_name: noah_postgres
+    environment:
+      POSTGRES_USER: noah_user
+      POSTGRES_PASSWORD: noah_password
+      POSTGRES_DB: noah_finance
+    ports:
+      - "5432:5432"
+    restart: always
+
+  # 3. MESSAGE BROKER: RabbitMQ 3
+  rabbit_broker:
+    image: rabbitmq:3-management
+    container_name: noah_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    ports:
+      - "5672:5672"   # Cổng giao tiếp cho code Python
+      - "15672:15672" # Cổng giao diện quản trị Web
+    restart: always
+
+  # 4. CACHE: Redis (Option 2 - Chống bán lố)
+  redis_cache:
+    image: redis:alpine
+    container_name: noah_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # 5. API GATEWAY: Kong 2.8 (DB-less)
+  kong_gateway:
+    image: kong:2.8
+    container_name: noah_kong
+    volumes:
+      - ./gateway/kong.yml:/usr/local/kong/declarative/kong.yml
+    environment:
+      - KONG_DATABASE=off
+      - KONG_DECLARATIVE_CONFIG=/usr/local/kong/declarative/kong.yml
+      - KONG_PROXY_ACCESS_LOG=/dev/stdout
+      - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+      - KONG_PROXY_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl
+    ports:
+      - "8000:8000"   # Cổng chính cho Client
+      - "8001:8001"   # Cổng cấu hình Admin
+    restart: always
+
+  # 6. Module 1: Legacy Adapter (Watchdog)
+  legacy_adapter:
+    build: ./inventory_sync
+    container_name: noah_adapter
+    depends_on:
+      - mysql_db
+      - redis_cache
+    volumes:
+      # Map thư mục dùng chung giữa máy thật và Container [cite: 594-598]
+      - ./shared_volumes/input:/app/input
+      - ./shared_volumes/processed:/app/processed
+      - ./shared_volumes/error:/app/error
+    restart: always
+
+  # 7. Module 2A: Order API (FastAPI)
+  order_api:
+    build: ./order_api
+    container_name: noah_order_api
+    depends_on:
+      - mysql_db
+      - redis_cache
+      - rabbit_broker
+    restart: always
+    # KHÔNG expose cổng ra máy thật để bảo mật, chỉ cho phép Kong Gateway truy cập vào
+
+  # 8. Module 2B: Order Worker (Consumer)
+  order_worker:
+    build: ./order_worker
+    container_name: noah_worker
+    depends_on:
+      - mysql_db
+      - postgres_db
+      - rabbit_broker
+    restart: always
+
