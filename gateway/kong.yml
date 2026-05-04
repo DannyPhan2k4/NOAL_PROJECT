@@ -1,4 +1,32 @@
 _format_version: "2.1"
 _transform: true
-services: []
-routes: []
+
+services:
+  # Kết nối tới Module 2A
+  - name: order-service
+    url: http://order_api:5000
+    routes:
+      - name: order-route
+        paths:
+          - [cite_start]/orders [cite: 107]
+    plugins:
+      - [cite_start]name: key-auth [cite: 110, 1031]
+      - name: rate-limiting
+        config:
+          [cite_start]minute: 10 [cite: 111, 1106]
+          policy: local
+
+  # Kết nối tới Module 4
+  - name: report-service
+    url: http://reporting_api:5001
+    routes:
+      - name: report-route
+        paths:
+          - [cite_start]/report [cite: 108]
+    plugins:
+      - [cite_start]name: key-auth [cite: 110]
+
+consumers:
+  - [cite_start]username: noah_admin [cite: 1032]
+    keyauth_credentials:
+      - [cite_start]key: noah-secret-key [cite: 110, 1037]
