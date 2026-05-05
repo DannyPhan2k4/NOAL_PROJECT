@@ -103,3 +103,4 @@ services:
       - rabbit_broker
     restart: always
 
+  
