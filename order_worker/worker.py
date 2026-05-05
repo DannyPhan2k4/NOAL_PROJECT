@@ -35,7 +35,7 @@ def get_postgres_connection():
             print("[WAIT] PostgreSQL chưa sẵn sàng, thử lại sau 5s...")
             time.sleep(5)
 
-# --- LOGIC XỬ LÝ ĐƠN HÀNG (CONSUMER CALLBACK) ---
+# --- LOGIC XỬ LÝ ĐƠN HÀNG  ---
 def process_order_callback(ch, method, properties, body):
     order_data = json.loads(body)
     order_id = order_data['order_id']
@@ -113,7 +113,7 @@ def start_worker():
             
     channel.queue_declare(queue='order_queue', durable=True)
     
-    # Chỉ nhận 1 tin nhắn tại một thời điểm (Fair Dispatch)
+    # Chỉ nhận 1 tin nhắn tại một thời điểm 
     channel.basic_qos(prefetch_count=1)
     
     channel.basic_consume(
